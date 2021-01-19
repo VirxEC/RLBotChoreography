@@ -2,5 +2,5 @@
 
 call venv/Scripts/activate
 pip install -U -r requirements.txt
-python ChoreographyHive --bot-folder=bots
+python ChoreographyHive
 pause
