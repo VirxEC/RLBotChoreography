@@ -15,6 +15,7 @@ class Drone:
         self.time: float = 0.0
         self.orient_m: np.ndarray = np.identity(3)
         self.ctrl: SimpleControllerState = SimpleControllerState()
+        self.on_ground = False
 
     def update(self, game_car: PlayerInfo, time: float):
         self.pos = a3v(game_car.physics.location)
@@ -23,6 +24,7 @@ class Drone:
         self.boost = game_car.boost
         self.orient_m = orient_matrix(self.rot)
         self.time = time
+        self.on_ground = game_car.has_wheel_contact
 
     def reset_ctrl(self):
         self.ctrl = SimpleControllerState()
@@ -227,20 +229,20 @@ def a3v(v: Vector3) -> np.ndarray:
     return np.array([v.x, v.y, v.z])
 
 
-def normalise(V : np.ndarray) -> np.ndarray:
-    """Normalises a vector.
+def normalize(V : np.ndarray) -> np.ndarray:
+    """normalizes a vector.
 
     Arguments:
         V {np.ndarray} -- Vector.
 
     Returns:
-        np.ndarray -- Normalised vector.
+        np.ndarray -- normalized vector.
     """
     magnitude = np.linalg.norm(V)
     if magnitude != 0.0:
         return V / magnitude
-    else:
-        return V
+
+    return V
 
 
 def orient_matrix(R: np.ndarray) -> np.ndarray:

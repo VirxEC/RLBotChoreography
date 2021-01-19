@@ -70,7 +70,7 @@ class RLBotChoreography:
             copied.name = player_config.name
             copied.rlbot_controlled = player_config.rlbot_controlled
             copied.config_path = player_config.config_path
-            copied.team = player_config.team
+            copied.team = player_config.team if i % 2 == 0 else not player_config.team
             if i < len(bundles):
                 copied.name = names[i]
                 # If you want to override bot appearances to get a certain visual effect, e.g. with

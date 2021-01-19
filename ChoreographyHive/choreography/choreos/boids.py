@@ -7,7 +7,7 @@ from rlbot.utils.game_state_util import GameState, CarState, Physics, Vector3, R
 from rlbot.utils.structures.game_interface import GameInterface
 
 from choreography.choreography import Choreography
-from choreography.drone import seek_pos, normalise, Drone
+from choreography.drone import seek_pos, normalize, Drone
 from choreography.group_step import BlindBehaviorStep, DroneListStep, StepResult, PerDroneStep
 
 
@@ -120,10 +120,10 @@ class Boids(Choreography):
 
             # Create seek target.
             target = np.zeros(3)
-            target += ALIGNMENT_MUL * normalise(alignment_vec)
-            target += COHESION_MUL * normalise(cohesion_vec)
-            target += SEPARATION_MUL * normalise(separation_vec)
-            target += AVOID_WALL_MUL * normalise(avoid_walls_vec)
+            target += ALIGNMENT_MUL * normalize(alignment_vec)
+            target += COHESION_MUL * normalize(cohesion_vec)
+            target += SEPARATION_MUL * normalize(separation_vec)
+            target += AVOID_WALL_MUL * normalize(avoid_walls_vec)
 
             target += drone.pos
 
