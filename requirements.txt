@@ -4,3 +4,4 @@ quicktracer
 RLUtilities
 docopt
 scipy
+numpy

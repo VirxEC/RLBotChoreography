@@ -1,4 +1,4 @@
-# RLBot Choreography
+# "The Sky" Choreography
 
 This project can produce choreographed sequences of car motion in
 Rocket League. It's useful for making cool synchronized performances.
@@ -32,18 +32,19 @@ so the code is not merged together yet. For now we'll link you to the branches.
 
 ![Bots doing the wave](wave.gif)
 
-1. Make sure you've installed [Python 3.7 64 bit](https://www.python.org/ftp/python/3.7.4/python-3.7.4-amd64.exe). During installation:
-   - Select "Add Python to PATH"
-   - Make sure pip is included in the installation
-1. Download or clone this repository
-1. In a command prompt, navigate to this directory.
-1. Run `pip install -r requirements.txt`
+1. Run `setup.bat`
 
 ## Usage
 
+### Simple
+
+Just run `launch.bat`
+
+### Advanced
+
 In a command prompt, in this directory, run `python ChoreographyHive`
 
-You can pass in an argument to specify the folder for bot appearances with `python ChoreographyHive --bot-folder=C:/some/path`
+You can pass in an argument to specify the folder for bot appearances with `python ChoreographyHive --bot-folder=bots`
 Other settings can be customised through the GUI.
 
 - If you have a bunch of bots in your bot folder (e.g. maybe you grabbed https://github.com/RLBot/RLBotPack),
