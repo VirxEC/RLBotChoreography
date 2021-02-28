@@ -13,7 +13,7 @@ from rlbot.utils.structures.game_interface import GameInterface
 
 class TheSky(Choreography):
     """
-    For seconds 0-14 of The Sky
+    For seconds 0-14 of The Sky (OLD VERSION)
     """
 
     def __init__(self, game_interface: GameInterface):

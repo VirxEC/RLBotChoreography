@@ -93,7 +93,10 @@ class Hivemind:
                 drone.update(packet.game_cars[drone.index], packet.game_info.seconds_elapsed)
 
             # Steps through the choreography.
-            self.choreo.step(packet, self.drones)
+            try:
+                self.choreo.step(packet, self.drones)
+            except Exception as e:
+                print(e)
 
             # Resets choreography once it has finished.
             if self.choreo.finished:

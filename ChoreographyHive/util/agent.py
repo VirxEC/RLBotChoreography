@@ -12,9 +12,6 @@ class Matrix3:
     # Matrix3[0] is the "forward" direction of a given car
     # Matrix3[1] is the "left" direction of a given car
     # Matrix3[2] is the "up" direction of a given car
-    # If you have a distance between the car and some object, ie ball.location - car.location,
-    # you can convert that to local coordinates by dotting it with this matrix
-    # ie: local_ball_location = Matrix3.dot(ball.location - car.location)
     def __init__(self, pitch=0, yaw=0, roll=0):
         CP = math.cos(pitch)
         SP = math.sin(pitch)
@@ -23,18 +20,22 @@ class Matrix3:
         CR = math.cos(roll)
         SR = math.sin(roll)
         # List of 3 vectors, each descriping the direction of an axis: Forward, Left, and Up
-        self.data = [
+        self.data = (
             Vector(CP*CY, CP*SY, SP),
             Vector(CY*SP*SR-CR*SY, SY*SP*SR+CR*CY, -CP*SR),
             Vector(-CR*CY*SP-SR*SY, -CR*SY*SP+SR*CY, CP*CR)
-        ]
+        )
         self.forward, self.right, self.up = self.data
 
     def __getitem__(self, key):
         return self.data[key]
 
     def __str__(self):
-        return f"[{self.forward}\n{self.right}\n{self.up}]"
+        return f"[{self.forward}\n {self.right}\n {self.up}]"
+
+    @staticmethod
+    def from_rotator(rotator) -> Matrix3:
+        return Matrix3(rotator.pitch, rotator.yaw, rotator.roll)
 
     def dot(self, vector):
         return Vector(self.forward.dot(vector), self.right.dot(vector), self.up.dot(vector))
@@ -145,6 +146,10 @@ class Vector:
     def __round__(self, decimals=0) -> Vector:
         # Rounds all of the values
         return Vector(*np.around(self._np, decimals=decimals))
+
+    @staticmethod
+    def from_vector(vec) -> Vector:
+        return Vector(vec.x, vec.y, vec.z)
 
     def magnitude(self) -> float:
         # Returns the length of the vector

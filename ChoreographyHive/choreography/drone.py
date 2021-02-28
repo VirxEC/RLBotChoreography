@@ -1,7 +1,12 @@
+from __future__ import annotations
+
+import math
+
 import numpy as np
 from rlbot.agents.base_agent import SimpleControllerState
-
-from rlbot.utils.structures.game_data_struct import Rotator, Vector3, PlayerInfo
+from rlbot.utils.structures.game_data_struct import (PlayerInfo, Rotator,
+                                                     Vector3)
+from util.agent import Vector
 
 
 class Drone:
@@ -17,6 +22,18 @@ class Drone:
         self.ctrl: SimpleControllerState = SimpleControllerState()
         self.on_ground = False
 
+        self._vec = Vector  # ignore this property
+        self.location = self._vec()
+        self.orientation = Matrix3()
+        self.velocity = self._vec()
+        self._local_velocity = self._vec()
+        self.angular_velocity = self._vec()
+        self.demolished = False
+        self.airborne = False
+        self.supersonic = False
+        self.jumped = False
+        self.doublejumped = False
+
     def update(self, game_car: PlayerInfo, time: float):
         self.pos = a3v(game_car.physics.location)
         self.rot = a3r(game_car.physics.rotation)
@@ -25,6 +42,54 @@ class Drone:
         self.orient_m = orient_matrix(self.rot)
         self.time = time
         self.on_ground = game_car.has_wheel_contact
+
+        car_phy = game_car.physics
+        self.location = self._vec.from_vector(car_phy.location)
+        self.velocity = self._vec.from_vector(car_phy.velocity)
+        self.orientation = Matrix3.from_rotator(car_phy.rotation)
+        self._local_velocity = self.local(self.velocity)
+        self.angular_velocity = self.orientation.dot((car_phy.angular_velocity.x, car_phy.angular_velocity.y, car_phy.angular_velocity.z))
+        self.demolished = game_car.is_demolished
+        self.airborne = not game_car.has_wheel_contact
+        self.supersonic = game_car.is_super_sonic
+        self.jumped = game_car.jumped
+        self.doublejumped = game_car.double_jumped
+
+    def local(self, value):
+        # Generic localization
+        return self.orientation.dot(value)
+
+    def local_velocity(self, velocity=None):
+        # Returns the velocity of an item relative to the car
+        # x is the velocity forwards (+) or backwards (-)
+        # y is the velocity to the left (+) or right (-)
+        # z if the velocity upwards (+) or downwards (-)
+        if velocity is None:
+            return self._local_velocity
+
+        return self.local(velocity)
+
+    def local_location(self, location):
+        # Returns the location of an item relative to the car
+        # x is how far the location is forwards (+) or backwards (-)
+        # y is how far the location is to the left (+) or right (-)
+        # z is how far the location is upwards (+) or downwards (-)
+        return self.local(location - self.location)
+
+    @property
+    def forward(self):
+        # A vector pointing forwards relative to the cars orientation. Its magnitude == 1
+        return self.orientation.forward
+
+    @property
+    def right(self):
+        # A vector pointing left relative to the cars orientation. Its magnitude == 1
+        return self.orientation.right
+
+    @property
+    def up(self):
+        # A vector pointing up relative to the cars orientation. Its magnitude == 1
+        return self.orientation.up
 
     def reset_ctrl(self):
         self.ctrl = SimpleControllerState()
@@ -243,6 +308,46 @@ def normalize(V : np.ndarray) -> np.ndarray:
         return V / magnitude
 
     return V
+
+
+class Matrix3:
+    # The Matrix3's sole purpose is to convert roll, pitch, and yaw data from the gametickpacket into an orientation matrix
+    # An orientation matrix contains 3 Vector's
+    # Matrix3[0] is the "forward" direction of a given car
+    # Matrix3[1] is the "left" direction of a given car
+    # Matrix3[2] is the "up" direction of a given car
+    def __init__(self, pitch=0, yaw=0, roll=0):
+        CP = math.cos(pitch)
+        SP = math.sin(pitch)
+        CY = math.cos(yaw)
+        SY = math.sin(yaw)
+        CR = math.cos(roll)
+        SR = math.sin(roll)
+        # List of 3 vectors, each descriping the direction of an axis: Forward, Left, and Up
+        self.data = (
+            Vector(CP*CY, CP*SY, SP),
+            Vector(CY*SP*SR-CR*SY, SY*SP*SR+CR*CY, -CP*SR),
+            Vector(-CR*CY*SP-SR*SY, -CR*SY*SP+SR*CY, CP*CR)
+        )
+        self.forward, self.right, self.up = self.data
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def __str__(self):
+        return f"[{self.forward}\n {self.right}\n {self.up}]"
+
+    @staticmethod
+    def from_rotator(rotator) -> Matrix3:
+        return Matrix3(rotator.pitch, rotator.yaw, rotator.roll)
+
+    def dot(self, vector):
+        return Vector(self.forward.dot(vector), self.right.dot(vector), self.up.dot(vector))
+
+    def det(self):
+        return self[0][0] * self[1][1] * self[2][2] + self[0][1] * self[1][2] * self[2][0] + \
+               self[0][2] * self[1][0] * self[2][1] - self[0][0] * self[1][2] * self[2][1] - \
+               self[0][1] * self[1][0] * self[2][2] - self[0][2] * self[1][1] * self[2][0]
 
 
 def orient_matrix(R: np.ndarray) -> np.ndarray:

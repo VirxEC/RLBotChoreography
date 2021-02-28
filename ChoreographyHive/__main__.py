@@ -23,7 +23,7 @@ from rlbot.matchconfig.match_config import PlayerConfig
 from rlbot.parsing.agent_config_parser import load_bot_appearance
 from rlbot.parsing.directory_scanner import scan_directory_for_bot_configs
 from rlbot.parsing.rlbot_config_parser import create_bot_config_layout
-from rlbot.setup_manager import SetupManager
+from rlbot.setup_manager import SetupManager, RocketLeagueLauncherPreference
 from rlbot.utils.structures.start_match_structures import MAX_PLAYERS
 
 import hivemind
@@ -80,7 +80,7 @@ class RLBotChoreography:
 
         manager = SetupManager()
         manager.load_match_config(match_config, {})
-        manager.connect_to_game()
+        manager.connect_to_game(RocketLeagueLauncherPreference(RocketLeagueLauncherPreference.STEAM, False))
         manager.start_match()
 
 
@@ -217,7 +217,7 @@ class RLBotChoreography:
         # Dropdown menu.
         self.choreographies = reload_choreographies()
         menuvar = tk.StringVar(root)
-        menuvar.set('TheSky') # Set the default option
+        menuvar.set('TheSky2') # Set the default option
         dropMenu = tk.OptionMenu(frame, menuvar, *self.choreographies, command=choreo_selected)
         dropMenu.pack()
 
