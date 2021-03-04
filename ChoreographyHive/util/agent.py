@@ -6,6 +6,34 @@ from typing import List, Tuple
 import numpy as np
 
 
+class last_touch:
+    def __init__(self):
+        self.location = Vector()
+        self.normal = Vector()
+        self.time = -1
+        self.car = None
+    
+    def update(self, packet: GameTickPacket):
+        touch = packet.game_ball.latest_touch
+        self.location = touch.hit_location
+        self.normal = touch.hit_normal
+        self.time = touch.time_seconds
+
+
+class ball_object:
+    def __init__(self):
+        self._vec = Vector  # ignore this property
+        self.location = self._vec()
+        self.velocity = self._vec()
+        self.last_touch = last_touch()
+
+    def update(self, packet: GameTickPacket):
+        ball = packet.game_ball
+        self.location = self._vec.from_vector(ball.physics.location)
+        self.velocity = self._vec.from_vector(ball.physics.velocity)
+        self.last_touch.update(packet)
+
+
 class Matrix3:
     # The Matrix3's sole purpose is to convert roll, pitch, and yaw data from the gametickpacket into an orientation matrix
     # An orientation matrix contains 3 Vector's

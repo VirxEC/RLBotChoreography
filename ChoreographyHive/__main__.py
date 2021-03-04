@@ -175,7 +175,7 @@ class RLBotChoreography:
             except NotImplementedError:
                 num_bots = int(entry_num_bots.get())
             finally:
-                self.min_bots = min(int(num_bots), MAX_PLAYERS)
+                self.min_bots = int(num_bots)
                 entry_num_bots.delete(0, last=tk.END)
                 entry_num_bots.insert(0, self.min_bots)
 

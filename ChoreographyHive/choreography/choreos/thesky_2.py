@@ -12,12 +12,15 @@ from rlbot.utils.game_state_util import (BallState, CarState, GameInfoState,
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 from rlbot.utils.structures.game_interface import GameInterface
 from util.vec import Vec3
-from util.agent import Vector
+from util.agent import Vector, ball_object
 
 
 radius = 3000
 radius2 = 2048
+radius3 = 700
 radian_offset = 0
+demo_cooldown = (41-13)/60
+
 gravity = Vector(z=-650)
 max_speed = 2300
 throttle_accel = 66 + (2/3)
@@ -32,29 +35,35 @@ delta_time = 1/60
 
 class TheSky2(Choreography):
     """
-    For seconds 12-36 of The Sky
+    For seconds 0:12-1:56 of The Sky
     """
 
     def __init__(self, game_interface: GameInterface):
         super().__init__()
         self.game_interface = game_interface
+        self.ball = ball_object()
+        
+        self.attacked_center = False
 
     def generate_sequence(self, drones: List[Drone]):
         self.sequence.clear()
 
         pause_time = 1.5
         self.drone_aerials = []
+        self.demos = []
+        self.alive_drones = list(range(60))
 
         self.sequence.append(DroneListStep(self.setup))
         self.sequence.append(DroneListStep(self.circular_procession))
         self.sequence.append(DroneListStep(self.setup_circle_align))
         self.sequence.append(DroneListStep(self.circle_align))
-        self.sequence.append(DroneListStep(self.act_2_start))
+        self.sequence.append(DroneListStep(self.act_2))
+        self.sequence.append(DroneListStep(self.act_2_end))
         # self.sequence.append(DroneListStep(self.end_choreo))
 
     @staticmethod
     def get_num_bots() -> int:
-        return 66
+        return 64
 
     def spin_around_rising_ball(self, packet, drones, start_time) -> StepResult:
         return StepResult(finished=True)
@@ -64,22 +73,37 @@ class TheSky2(Choreography):
         return StepResult(finished=True)
 
     def setup(self, packet, drones, start_time) -> StepResult:
+        # self.game_interface.set_game_state(GameState(game_info=GameInfoState(game_speed=0.25)))
+
         car_states = {}
-        radian_spacing = 2 * math.pi / len(drones)
+        radian_spacing = 2 * math.pi / 60
 
         for index, drone in enumerate(drones):
-            progress = index * radian_spacing + radian_offset
+            if 61 <= index <= 64:
+                car_states[drone.index] = CarState(
+                    Physics(location=Vector3(3520, 5100, 0),
+                            velocity=Vector3(0, 0, 0)))
+                continue
+
+            if index == 60:
+                car_states[drone.index] = CarState(
+                    Physics(location=Vector3(0, 0, 20),
+                            velocity=Vector3(0, 0, 0),
+                            rotation=Rotator(0, 0, 0)))
+                continue
+
+            progress = index * radian_spacing
             target = Vec3(radius * math.sin(progress), radius * math.cos(progress), 0)
 
             car_states[drone.index] = CarState(
-                Physics(location=Vector3(target.x, target.y, 50),
+                Physics(location=Vector3(target.x, target.y, 20),
                         velocity=Vector3(0, 0, 0),
                         rotation=Rotator(0, -progress, 0)))
 
         self.game_interface.set_game_state(GameState(
             cars=car_states,
             ball=BallState(physics=Physics(
-                location=Vector3(0, 0, 93),
+                location=Vector3(0, 0, 155),
                 velocity=Vector3(0, 0, 0),
                 angular_velocity=Vector3(0, 0, 0)
             ))
@@ -88,65 +112,121 @@ class TheSky2(Choreography):
         return StepResult(finished=True)
 
     def circular_procession(self, packet: GameTickPacket, drones, start_time) -> StepResult:
-        """
-        Makes all cars drive in a slowly shrinking circle.
-        https://gfycat.com/yearlygreathermitcrab
-        """
+        self.ball.update(packet)
+
         elapsed = packet.game_info.seconds_elapsed - start_time
-        inactive_drones = elapsed / 0.44 - 5
-        radian_spacing = 2 * math.pi / max(len(drones) - inactive_drones, 16)
+        inactive_drones = max((elapsed - 4) / 0.48, 0)
+        radian_spacing = 2 * math.pi / max(60 - inactive_drones, 16)
         adjusted_radius = radius - elapsed * 75
         
         for i, drone in enumerate(drones):
             if i >= inactive_drones:
-                progress = i * radian_spacing + elapsed * .25
-                target = [adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), 0]
-                slow_to_pos(drone, target)
-            else:
-                if len(self.drone_aerials) == i:
-                    progress = i * radian_spacing + (elapsed + 2) * .25
-                    target = Vector(adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), 200 + i * 10)
-                    self.drone_aerials.append(Aerial(target, False))
+                if i < 60:
+                    progress = i * radian_spacing + elapsed * .25
+                    target = [adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), 0]
+                    slow_to_pos(drone, target)
+                continue
 
-                self.drone_aerials[i].target.z += 0.1
-                self.drone_aerials[i].run(drone, packet.game_info.seconds_elapsed)
-        return StepResult(finished=inactive_drones > len(drones) + 4)
+            if len(self.drone_aerials) == i:
+                progress = i * radian_spacing + (elapsed + 2) * .25
+                target = Vector(adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), 200 + i * 10)
+                self.drone_aerials.append(Hover(target, i != 60))
+
+            self.drone_aerials[i].target.z += 0.1
+            self.drone_aerials[i].run(drone, packet.game_info.seconds_elapsed)
+            
+            if i == 60:
+                break
+        return StepResult(finished=inactive_drones > 61)
 
     def setup_circle_align(self, packet: GameTickPacket, drones, start_time) -> StepResult:
-        radian_spacing = 2 * math.pi / len(drones)
-        elapsed = packet.game_info.seconds_elapsed - start_time
+        self.ball.update(packet)
+        self.game_interface.set_game_state(GameState(ball=BallState(physics=Physics(location=Vector3(drones[60].location.x, drones[60].location.y), velocity=Vector3(0, 0), angular_velocity=Vector3(*drones[60].raw_angular_velocity)))))
+
+        radian_spacing = 2 * math.pi / 20
+        radian_spacing_v = 2 * math.pi / 10
 
         for i, drone in enumerate(drones):
-            progress = i * radian_spacing
-            self.drone_aerials[i].target = Vector(radius * math.sin(progress), radius * math.cos(progress), 1000)
+            if i == 60:
+                self.drone_aerials[i].target = Vector(0, 0, 1000)
+            else:
+                # 0 & 1: center circle
+                # 2, 3, 4, & 5: side circles
+                group = i % 6
+                
+                if group < 2:
+                    progress = (i // 6 * 2 + group) * radian_spacing
+                    self.drone_aerials[i].target = Vector(radius2 * math.sin(progress), radius2 * math.cos(progress), 1000)
+                elif group < 4:
+                    progress = (i // 6 * 2 + (group - 2)) * radian_spacing
+                    Q = radius3 * math.sin(progress)
+                    adjusted_radius = radius2 + Q
+                    self.drone_aerials[i].target = Vector(adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), 1000 + Q)
+                else:
+                    progress = (i // 6 * 2 + (group - 4)) * radian_spacing
+                    Q = radius3 * math.sin(progress)
+                    adjusted_radius = radius2 - Q
+                    self.drone_aerials[i].target = Vector(adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), 1000 - Q)
             self.drone_aerials[i].run(drone, packet.game_info.seconds_elapsed)
+
+            if i == 60:
+                break
 
         return StepResult(finished=True)
 
     def circle_align(self, packet: GameTickPacket, drones, start_time) -> StepResult:
+        self.ball.update(packet)
+        self.game_interface.set_game_state(GameState(ball=BallState(physics=Physics(location=Vector3(drones[60].location.x, drones[60].location.y), velocity=Vector3(0, 0), angular_velocity=Vector3(*drones[60].raw_angular_velocity)))))
+
         for i, drone in enumerate(drones):
             self.drone_aerials[i].run(drone, packet.game_info.seconds_elapsed)
+            if i == 60:
+                break
 
-        return StepResult(finished=packet.game_info.seconds_elapsed - start_time > 10)
+        return StepResult(finished=packet.game_info.seconds_elapsed - start_time > 14)
 
-    def act_2_start(self, packet: GameTickPacket, drones, start_time) -> StepResult:
-        radian_spacing = 2 * math.pi / 22
-        radian_spacing_v = 2 * math.pi / 11
+    def act_2(self, packet: GameTickPacket, drones, start_time) -> StepResult:
+        self.ball.update(packet)
+
+        if self.odd_tick % 2 == 0:
+            self.game_interface.set_game_state(GameState(ball=BallState(physics=Physics(location=Vector3(drones[60].location.x, drones[60].location.y), velocity=Vector3(0, 0), angular_velocity=Vector3(*drones[60].raw_angular_velocity)))))
+
+        radian_spacing = 2 * math.pi / 20
         elapsed = packet.game_info.seconds_elapsed - start_time
 
+        # elapsed @ 16 seconds (1:06): foreshadow attack
+        # elapsed @ 31 seconds (1:21): start attack
+        # elapsed @ 60 seconds (1:50): attack center air dribbler then stop
+
         for i, drone in enumerate(drones):
-            # 0 & 1: center circle
-            # 2, 3, 4, & 5: side circles
-            group = i % 6
-            
-            if group == 0 or group == 1:
-                progress = (i // 6 * 2 + group) * radian_spacing + elapsed * .25
-                self.drone_aerials[i].target = Vector(radius2 * math.sin(progress), radius2 * math.cos(progress), 1000)
+            if 61 <= i <= 64:
+                continue
+
+            if i < 60:
+                # 0 & 1: center circle
+                # 2, 3, 4, & 5: side circles
+                group = i % 6
+                
+                if group < 2:
+                    progress = (i // 6 * 2 + group) * radian_spacing + elapsed * .4
+                    self.drone_aerials[i].target = Vector(radius2 * math.sin(progress), radius2 * math.cos(progress), 1000)
+                elif group < 4:
+                    progress = (i // 6 * 2 + (group - 2)) * radian_spacing + elapsed * .4
+                    Q = radius3 * math.sin(progress)
+                    adjusted_radius = radius2 + Q
+                    self.drone_aerials[i].target = Vector(adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), 1000 + Q)
+                else:
+                    progress = (i // 6 * 2 + (group - 4)) * radian_spacing + elapsed * .4
+                    Q = radius3 * math.sin(progress)
+                    adjusted_radius = radius2 - Q
+                    self.drone_aerials[i].target = Vector(adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), 1000 - Q)
             
             self.drone_aerials[i].run(drone, packet.game_info.seconds_elapsed)
 
-        return StepResult()
+        return StepResult(finished=self.attacked_center)
 
+    def act_2_end(self, packet: GameTickPacket, drones, start_time) -> StepResult:
+        return StepResult(finished=packet.game_info.seconds_elapsed - start_time > 10)
 
 
 def cap(x, low, high):
@@ -190,8 +270,8 @@ def steerPD(angle, rate):
     return cap(((35*(angle+rate))**3)/10, -1, 1)
 
 
-# A combination of Blind and Deaf's hover code and VirxERLU's car control
-class Aerial:
+# A combination of Blind and Deaf's hover code and VirxERLU's car control + jump code
+class Hover:
     def __init__(self, target, fast_aerial=True):
         self.fast_aerial = fast_aerial
         self.target = target
@@ -236,16 +316,16 @@ class Aerial:
         if delta_x.magnitude() > boost_accel:
             delta_x *= boost_accel / delta_x.magnitude()
 
-        delta_xy = Vector(delta_x.x - me.velocity.x, delta_x.y - me.velocity.y, 1000 if not self.jumping else 0)
+        delta_xy = Vector(delta_x.x - me.velocity.x, delta_x.y - me.velocity.y, 1000 if (not self.jumping or not self.jump_type_fast) else 0)
         direction = delta_xy.normalize()
 
-        if self.counter in {0, 4}: defaultPD(me, me.local(delta_xy), up=sign(math.sin(time)) * (Vector() - me.location).flatten().normalize())
+        if self.counter in {0, 4}: defaultPD(me, me.local(delta_xy), up=sign(math.sin(time)) * (-1 if me.index == 60 else 1) * (Vector() - me.location).flatten().normalize())
 
+        me.ctrl.throttle = 1
         # only boost/throttle if we're facing the right direction
-        if abs(me.forward.angle(delta_xy)) < 0.5 and not self.jumping:
-            me.ctrl.throttle = 1
+        if abs(me.forward.angle(delta_xy)) < 1 and (not self.jumping or not self.jump_type_fast):
             # tap boost to keep height
-            if (delta_x.z - me.velocity.z * 0.5) > 0:
+            if delta_x.z - me.velocity.z * 0.5 > 0:
                 me.ctrl.boost = True
 
             # if the target is relatively far, hold boost even when we're higher than the target to keep moving

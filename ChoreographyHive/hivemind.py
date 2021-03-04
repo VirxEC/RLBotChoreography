@@ -1,15 +1,18 @@
 '''The Hivemind'''
 
-from rlbot.utils.structures.bot_input_struct import PlayerInput
+import time
+import traceback
+
 from rlbot.agents.base_agent import SimpleControllerState
 from rlbot.utils.logging_utils import get_logger
-from rlbot.utils.structures.game_data_struct import GameTickPacket, FieldInfoPacket
+from rlbot.utils.structures.bot_input_struct import PlayerInput
+from rlbot.utils.structures.game_data_struct import (FieldInfoPacket,
+                                                     GameTickPacket)
 from rlbot.utils.structures.game_interface import GameInterface
-
-import time
 
 from choreography.drone import Drone
 from queue_commands import QCommand
+
 
 class Hivemind:
     """
@@ -95,8 +98,8 @@ class Hivemind:
             # Steps through the choreography.
             try:
                 self.choreo.step(packet, self.drones)
-            except Exception as e:
-                print(e)
+            except Exception:
+                traceback.print_exc()
 
             # Resets choreography once it has finished.
             if self.choreo.finished:

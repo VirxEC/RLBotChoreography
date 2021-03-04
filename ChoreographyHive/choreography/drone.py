@@ -48,7 +48,8 @@ class Drone:
         self.velocity = self._vec.from_vector(car_phy.velocity)
         self.orientation = Matrix3.from_rotator(car_phy.rotation)
         self._local_velocity = self.local(self.velocity)
-        self.angular_velocity = self.orientation.dot((car_phy.angular_velocity.x, car_phy.angular_velocity.y, car_phy.angular_velocity.z))
+        self.raw_angular_velocity = self._vec.from_vector(car_phy.angular_velocity)
+        self.angular_velocity = self.orientation.dot(self.raw_angular_velocity)
         self.demolished = game_car.is_demolished
         self.airborne = not game_car.has_wheel_contact
         self.supersonic = game_car.is_super_sonic

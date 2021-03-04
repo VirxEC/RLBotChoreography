@@ -10,9 +10,14 @@ class Choreography:
     def __init__(self):
         self.sequence = []
         self.sequence_index = 0
+        self.odd_tick = -1
         self.finished = False
 
     def step(self, packet: GameTickPacket, drones: List[Drone]):
+        self.odd_tick += 1
+        if self.odd_tick == 4:
+            self.odd_tick = 0
+
         self.pre_step(drones)
         if self.sequence_index < len(self.sequence):
             step = self.sequence[self.sequence_index]
