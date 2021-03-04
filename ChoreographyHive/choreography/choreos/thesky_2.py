@@ -1,4 +1,5 @@
 import math
+import random
 from typing import List
 
 import numpy as np
@@ -11,9 +12,8 @@ from rlbot.utils.game_state_util import (BallState, CarState, GameInfoState,
                                          GameState, Physics, Rotator, Vector3)
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 from rlbot.utils.structures.game_interface import GameInterface
-from util.vec import Vec3
 from util.agent import Vector, ball_object
-
+from util.vec import Vec3
 
 radius = 3000
 radius2 = 2048
@@ -50,7 +50,7 @@ class TheSky2(Choreography):
 
         pause_time = 1.5
         self.drone_aerials = []
-        self.demos = []
+        self.last_demo_time = -1
         self.alive_drones = list(range(60))
 
         self.sequence.append(DroneListStep(self.setup))
@@ -59,7 +59,7 @@ class TheSky2(Choreography):
         self.sequence.append(DroneListStep(self.circle_align))
         self.sequence.append(DroneListStep(self.act_2))
         self.sequence.append(DroneListStep(self.act_2_end))
-        # self.sequence.append(DroneListStep(self.end_choreo))
+        self.sequence.append(DroneListStep(self.end_choreo))
 
     @staticmethod
     def get_num_bots() -> int:
@@ -73,7 +73,7 @@ class TheSky2(Choreography):
         return StepResult(finished=True)
 
     def setup(self, packet, drones, start_time) -> StepResult:
-        # self.game_interface.set_game_state(GameState(game_info=GameInfoState(game_speed=0.25)))
+        self.game_interface.set_game_state(GameState(game_info=GameInfoState(game_speed=0.25)))
 
         car_states = {}
         radian_spacing = 2 * math.pi / 60
@@ -185,6 +185,11 @@ class TheSky2(Choreography):
 
         return StepResult(finished=packet.game_info.seconds_elapsed - start_time > 14)
 
+    def get_random_demo_target(self):
+        target = random.choice(self.alive_drones)
+        self.alive_drones.remove(target)
+        return target
+
     def act_2(self, packet: GameTickPacket, drones, start_time) -> StepResult:
         self.ball.update(packet)
 
@@ -193,37 +198,64 @@ class TheSky2(Choreography):
 
         radian_spacing = 2 * math.pi / 20
         elapsed = packet.game_info.seconds_elapsed - start_time
+        hover_height = 1022 - max(0, (elapsed - 60) * 100)
 
         # elapsed @ 16 seconds (1:06): foreshadow attack
         # elapsed @ 31 seconds (1:21): start attack
         # elapsed @ 60 seconds (1:50): attack center air dribbler then stop
 
         for i, drone in enumerate(drones):
-            if 61 <= i <= 64:
-                continue
-
             if i < 60:
+                if drone.demolished:
+                    continue
+                elif i not in self.alive_drones:
+                    self.alive_drones.append(i)
                 # 0 & 1: center circle
                 # 2, 3, 4, & 5: side circles
                 group = i % 6
                 
                 if group < 2:
-                    progress = (i // 6 * 2 + group) * radian_spacing + elapsed * .4
-                    self.drone_aerials[i].target = Vector(radius2 * math.sin(progress), radius2 * math.cos(progress), 1000)
+                    progress = (i // 6 * 2 + group) * radian_spacing + elapsed * .3
+                    self.drone_aerials[i].target = Vector(radius2 * math.sin(progress), radius2 * math.cos(progress), hover_height)
                 elif group < 4:
-                    progress = (i // 6 * 2 + (group - 2)) * radian_spacing + elapsed * .4
+                    progress = (i // 6 * 2 + (group - 2)) * radian_spacing + elapsed * .3
                     Q = radius3 * math.sin(progress)
                     adjusted_radius = radius2 + Q
-                    self.drone_aerials[i].target = Vector(adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), 1000 + Q)
+                    self.drone_aerials[i].target = Vector(adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), hover_height + Q)
                 else:
-                    progress = (i // 6 * 2 + (group - 4)) * radian_spacing + elapsed * .4
+                    progress = (i // 6 * 2 + (group - 4)) * radian_spacing + elapsed * .3
                     Q = radius3 * math.sin(progress)
                     adjusted_radius = radius2 - Q
-                    self.drone_aerials[i].target = Vector(adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), 1000 - Q)
+                    self.drone_aerials[i].target = Vector(adjusted_radius * math.sin(progress), adjusted_radius * math.cos(progress), hover_height - Q)
             
             self.drone_aerials[i].run(drone, packet.game_info.seconds_elapsed)
 
-        return StepResult(finished=self.attacked_center)
+            if i == 60:
+                break
+
+        if elapsed >= 31:
+            if elapsed - self.last_demo_time >= demo_cooldown:
+                car_states = {}
+
+                for i in (61, 62):  # (61, 62, 63)
+                    target = drones[self.get_random_demo_target()] if elapsed < 60 else drones[60]
+                    car_states[i] = CarState(physics=Physics(
+                        location=Vector3( target.location.x - 100, target.location.y, target.location.z),
+                        velocity=Vector3(2300, 0, 0),
+                        rotation=Vector3(0, 0, 0)
+                    ))
+
+                if elapsed >= 60:
+                    self.attacked_center = True
+
+                self.game_interface.set_game_state(GameState(
+                    cars=car_states
+                ))
+
+                self.last_demo_time = elapsed
+
+
+        return StepResult(finished=elapsed > 63)
 
     def act_2_end(self, packet: GameTickPacket, drones, start_time) -> StepResult:
         return StepResult(finished=packet.game_info.seconds_elapsed - start_time > 10)
